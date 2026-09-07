@@ -11,9 +11,16 @@
 void CREATE_TABLE(char* nome_arq_entrada, char* nome_arq_saida)
 {
     FILE *arq_entrada = fopen(nome_arq_entrada,"rt");
+
+    if(arq_entrada == NULL )
+    {
+        printf("Falha no processamento do arquivo.");
+        return;
+    }
+
     FILE *arq_saida = fopen(nome_arq_saida,"wb");
 
-    if(arq_entrada == NULL || arq_saida == NULL)
+    if(arq_saida == NULL )
     {
         printf("Falha no processamento do arquivo.");
         return;
@@ -50,6 +57,8 @@ void CREATE_TABLE(char* nome_arq_entrada, char* nome_arq_saida)
 
     fclose(arq_entrada);
     fclose(arq_saida);
+
+    nroPares(nome_arq_saida);
 
     BinarioNaTela(nome_arq_saida);
 }
@@ -118,11 +127,12 @@ ASSIST_REG Registro_de_referencia()
         // Processo lógico para definir o registro de referência
         if(strcmp(nome_do_campo,"unidadeMedida") == 0)
         {
-            ScanQuoteString(valor);
+            scanf("%s",valor);
+
             if(strcmp(valor,"NULO") == 0)
                 r_ref.r.unidadeMedida = LIXO;
             else
-                r_ref.r.unidadeMedida = valor[0];
+                r_ref.r.unidadeMedida = valor[1];
             r_ref.usa_un_medida = SIM;
         }
         else if( strcmp(nome_do_campo,"idPoPs") == 0)
@@ -367,6 +377,7 @@ void DELETE(char *nome_arq_bin, int n)
         }
         */
 
+
         // Volta o ponteiro do arquivo para o início dos registros de dados
         // para realizar um nova busca de um registro de referência
         fseek(arq, sizeofHEADER, SEEK_SET);
@@ -382,6 +393,8 @@ void DELETE(char *nome_arq_bin, int n)
 
     // Libera a memória alocada no heap!
     free(RRNs_Removidos);
+
+    nroPares(nome_arq_bin);
 
     BinarioNaTela(nome_arq_bin);
 }
@@ -496,6 +509,8 @@ void UPDATE(char* nome_arq_bin, int n)
     }
 
     free(Reg_Atualizados);
+
+    nroPares(nome_arq_bin);
 
     BinarioNaTela(nome_arq_bin);
 }

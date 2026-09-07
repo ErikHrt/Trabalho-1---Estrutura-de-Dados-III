@@ -147,7 +147,7 @@ int Ler_DATA_bin(FILE* arq , DATA_REG *reg)
         return 1;
     if(reg->removido == REMOVIDO)
     {
-        fseek(arq,sizeof(DATA_REG) - 1, SEEK_CUR);
+        fseek(arq, sizeofDATA - 1, SEEK_CUR);
         return -1;
     }
     if (fread(&reg->encadeamentoPilha, sizeof(int), 1, arq) != 1)
@@ -234,6 +234,8 @@ int Busca_Sequencial(FILE *arq, ASSIST_REG *r_ref, ASSIST_REG *r_copia)
             rrn_atual++; continue;
         }
 
+        //PRINTAR_REGISTRO(&(r_copia->r));
+
         r_copia->RRN = rrn_atual;
         return 0;
     }
@@ -263,4 +265,69 @@ void PRINTAR_REGISTRO(DATA_REG* reg)
         printf("NULO\n");
     else
         printf("\"%c\"\n",reg->unidadeMedida);
+}
+
+
+void nroPares(char *nome_arq_bin)
+{
+    FILE * arq = fopen(nome_arq_bin, "r+b");
+
+    if(arq == NULL)
+    {
+        printf("Falha no processamento do arquivo.\n");
+        return;
+    }
+
+    HEADER_REG head = innit_header_reg();
+    DATA_REG reg = innit_data_reg();
+
+    Ler_HEADER_bin(arq, &head);
+
+    int nro = 0;
+
+    int (*par)[2] = malloc(head.proxRRN * sizeof(*par));
+
+    if (par == NULL)
+    {
+        printf("Falha na alocacao de memoria.\n");
+        fclose(arq);
+        return;
+    }
+
+    int status_leitura = 0;
+
+    while( (status_leitura = Ler_DATA_bin(arq, &reg)) != 1)
+    {
+        if( status_leitura == -1)
+        {
+            continue;
+        }
+
+        int encontrou = 0;
+
+        for(int j = 0; j < nro; j++)
+        {
+            if(reg.idPoPs == par[j][0] && reg.idPopsConectado == par[j][1])
+            {
+                encontrou = 1;
+                break;
+            }
+        }
+
+        if(!encontrou)
+        {
+            par[nro][0] = reg.idPoPs;
+            par[nro][1] = reg.idPopsConectado;
+            nro++;
+        }
+    }
+
+    head.nroPares = nro;
+
+    fseek(arq, 0, SEEK_SET);
+    Escrever_HEADER_bin(arq, &head);
+
+    fclose(arq);
+
+    free(par);
 }

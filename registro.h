@@ -77,5 +77,7 @@ int Busca_Sequencial(FILE *arq, ASSIST_REG *r_ref, ASSIST_REG *r_copia);
 
 void PRINTAR_REGISTRO(DATA_REG* reg);
 
+void nroPares(char *nome_arq_bin);
+
 
 #endif // REGISTRO_H_INCLUDED
