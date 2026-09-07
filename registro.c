@@ -1,0 +1,266 @@
+#include "registro.h"
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+char delimitador[] = ",\n";
+
+// Inicialização do Registro de Cabeçalho
+HEADER_REG innit_header_reg()
+{
+    HEADER_REG h_reg = (HEADER_REG)
+    {
+        INCONSISTENTE,
+        NULO,
+        0,
+        0,
+        0
+    };
+
+    return h_reg;
+}
+
+// Inicialização do Registro de Dados
+DATA_REG innit_data_reg()
+{
+    DATA_REG reg = (DATA_REG)
+    {
+        SALVO,
+        NULO,
+        NULO,
+        NULO,
+        NULO,
+        LIXO
+    };
+
+    return reg;
+}
+
+/*
+    Função auxiliar que imita a funcao strsep() não disponível no Windows
+    Necessária para lidar com campos vazios nos arquivos .csv
+*/
+char *strsep_WIN(char **stringp, const char *delim)
+{
+    char *start;
+    char *p;
+
+    if (stringp == NULL || *stringp == NULL)
+        return NULL;
+
+    start = *stringp;
+    p = strpbrk(start, delim);
+
+    if (p != NULL)
+    {
+        *p = '\0';
+        *stringp = p + 1;
+    }
+    else
+        *stringp = NULL;
+
+    return start;
+}
+
+/*
+    Lê uma linha do arquivo .csv de entrada
+    faz o parsing e armazena na struct de registro de dados
+
+    Retorna 1 se chegou ao fim do arquivo,
+    ou 0 caso contrário
+*/
+int Ler_registro_csv(FILE *arq_entrada, DATA_REG *reg)
+{
+    char buffer[Tamanho_STRING];
+
+    if (fgets(buffer, Tamanho_STRING, arq_entrada) == NULL)
+        return 1;
+
+    char *ptr_leitura = buffer;
+    char *token;
+
+    token = strsep_WIN(&ptr_leitura, delimitador);
+    if (token != NULL && token[0] != '\0' && token[0] != ' ')
+        reg->idPoPs = atoi(token);
+    else reg->idPoPs = NULO;
+
+    token = strsep_WIN(&ptr_leitura, delimitador);
+    if (token != NULL && token[0] != '\0' && token[0] != ' ')
+        reg->idPopsConectado = atoi(token);
+    else reg->idPopsConectado = NULO;
+
+    token = strsep_WIN(&ptr_leitura, delimitador);
+    if (token != NULL && token[0] != '\0' && token[0] != ' ')
+        reg->velocidade = atoi(token);
+    else reg->velocidade = NULO;
+
+    token = strsep_WIN(&ptr_leitura, delimitador);
+    if (token != NULL && token[0] != '\0' && token[0] != ' ')
+        reg->unidadeMedida = token[0];
+    else reg->unidadeMedida = LIXO;
+
+    return 0;
+}
+
+
+// Escreve um registro de dado no arquivo binário
+void Escrever_DATA_bin(FILE* arq,DATA_REG* reg)
+{
+    fwrite(&(reg->removido),sizeof(char),1,arq);
+
+    fwrite(&(reg->encadeamentoPilha),sizeof(int),1,arq);
+
+    fwrite(&(reg->idPoPs),sizeof(int),1,arq);
+
+    fwrite(&(reg->idPopsConectado),sizeof(int),1,arq);
+
+    fwrite(&(reg->velocidade),sizeof(int),1,arq);
+
+    fwrite(&(reg->unidadeMedida),sizeof(char),1,arq);
+}
+
+// Escreve um registro de cabeçalho no arquivo binário
+void Escrever_HEADER_bin(FILE* arq, HEADER_REG* hreg)
+{
+    fwrite(&(hreg->status),sizeof(char),1,arq);
+
+    fwrite(&(hreg->topoPilha),sizeof(int),1,arq);
+
+    fwrite(&(hreg->proxRRN),sizeof(int),1,arq);
+
+    fwrite(&(hreg->nroRegRem),sizeof(int),1,arq);
+
+    fwrite(&(hreg->nroPares),sizeof(int),1,arq);
+}
+
+/*
+    Lê um registro de dado do arquivo binário
+    Retorna:
+    0  - caso bem-sucedido
+    -1 - caso o registro foi logicamente removido
+    1  - caso tenha chegado ao fim do arquivo
+*/
+int Ler_DATA_bin(FILE* arq , DATA_REG *reg)
+{
+    if (fread(&reg->removido, sizeof(char), 1, arq) != 1)
+        return 1;
+    if(reg->removido == REMOVIDO)
+    {
+        fseek(arq,sizeof(DATA_REG) - 1, SEEK_CUR);
+        return -1;
+    }
+    if (fread(&reg->encadeamentoPilha, sizeof(int), 1, arq) != 1)
+        return 1;
+
+    if (fread(&reg->idPoPs, sizeof(int), 1, arq) != 1)
+        return 1;
+
+    if (fread(&reg->idPopsConectado, sizeof(int), 1, arq) != 1)
+        return 1;
+
+    if (fread(&reg->velocidade, sizeof(int), 1, arq) != 1)
+        return 1;
+
+    if (fread(&reg->unidadeMedida, sizeof(char), 1, arq) != 1)
+        return 1;
+
+    return 0;
+}
+
+/*
+    Lê um registro de cabeçalho
+    Retorna:
+    0 - caso bem-sucedido
+    1 - caso contrário
+*/
+int Ler_HEADER_bin(FILE* arq, HEADER_REG* hreg)
+{
+    if (fread(&hreg->status, sizeof(char), 1, arq) != 1)
+        return 1;
+
+    if (fread(&hreg->topoPilha, sizeof(int), 1, arq) != 1)
+        return 1;
+
+    if (fread(&hreg->proxRRN, sizeof(int), 1, arq) != 1)
+        return 1;
+
+    if (fread(&hreg->nroRegRem, sizeof(int), 1, arq) != 1)
+        return 1;
+
+    if (fread(&hreg->nroPares, sizeof(int), 1, arq) != 1)
+        return 1;
+
+    return 0;
+}
+
+/*
+    Realiza um busca sequencial até achar um registro descrito pelo
+    registro de referência (r_ref) e copia-o todo no registro r_copia
+    Retorna:
+    0 - caso tenha encontrado algum
+    1 - caso tenha chegado ao fim do arquivo
+*/
+int Busca_Sequencial(FILE *arq, ASSIST_REG *r_ref, ASSIST_REG *r_copia)
+{
+    int rrn_atual = r_ref->RRN;
+    int status_leitura;
+
+    while( (status_leitura = Ler_DATA_bin(arq,&(r_copia->r))) != 1)
+    {
+        if(status_leitura == -1)
+        {
+            rrn_atual++;
+            continue;
+        }
+
+        if (r_ref->usa_idpops == SIM && r_ref->r.idPoPs != r_copia->r.idPoPs)
+        {
+            rrn_atual++; continue;
+        }
+
+        if (r_ref->usa_idconecta == SIM && r_ref->r.idPopsConectado != r_copia->r.idPopsConectado)
+        {
+            rrn_atual++; continue;
+        }
+
+        if (r_ref->usa_velocidade == SIM && r_ref->r.velocidade != r_copia->r.velocidade)
+        {
+            rrn_atual++; continue;
+        }
+
+        if (r_ref->usa_un_medida == SIM && r_ref->r.unidadeMedida != r_copia->r.unidadeMedida)
+        {
+            rrn_atual++; continue;
+        }
+
+        r_copia->RRN = rrn_atual;
+        return 0;
+    }
+
+    return 1;
+}
+
+// Print do Registro
+void PRINTAR_REGISTRO(DATA_REG* reg)
+{
+    if(reg->idPoPs == NULO)
+        printf("NULO ");
+    else
+        printf("%d ",reg->idPoPs);
+
+    if(reg->idPopsConectado == NULO)
+        printf("NULO ");
+    else
+        printf("%d ",reg->idPopsConectado);
+
+    if(reg->velocidade == NULO)
+        printf("NULO ");
+    else
+        printf("%d ",reg->velocidade);
+
+    if(reg->unidadeMedida == LIXO)
+        printf("NULO\n");
+    else
+        printf("\"%c\"\n",reg->unidadeMedida);
+}
