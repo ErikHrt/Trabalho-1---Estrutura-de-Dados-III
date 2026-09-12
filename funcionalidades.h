@@ -11,6 +11,8 @@ void ACCESS(char *nome_arq_bin,int RRN);
 
 void DELETE(char *nome_arq_bin, int n);
 
+void INSERT(char *nome_arq_bin, int n);
+
 void UPDATE(char* nome_arq_bin, int n);
 
 

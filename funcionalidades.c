@@ -23,6 +23,7 @@ void CREATE_TABLE(char* nome_arq_entrada, char* nome_arq_saida)
     if(arq_saida == NULL )
     {
         printf("Falha no processamento do arquivo.");
+        fclose(arq_entrada);
         return;
     }
 
@@ -72,7 +73,7 @@ void SELECT(char* nome_arq_bin)
 
     if(arq == NULL)
     {
-        printf("Falha no processamento do arquivo.\n");
+        printf("Falha no processamento do arquivo.");
         return;
     }
 
@@ -84,16 +85,21 @@ void SELECT(char* nome_arq_bin)
 
     if(head.proxRRN == 0)
     {
-        printf("Registro inexistente.\n");
+        printf("Registro inexistente.");
+        fclose(arq);
         return;
     }
 
+    int status_leitura;
+
     // Loop de leitura dos registros de dados
-    while(Ler_DATA_bin(arq,&reg) != 1)
+    while( (status_leitura = Ler_DATA_bin(arq,&reg)) != 1)
     {
         // Printa o registro somente se não está logicamente removido
-        if(reg.removido != REMOVIDO)
-            PRINTAR_REGISTRO(&reg);
+        if (status_leitura == -1)
+        continue;
+
+        Printar_DATA_REG(&reg);
     }
 
     // Fecha o arquivo
@@ -122,13 +128,12 @@ ASSIST_REG Registro_de_referencia()
 
     while(m--)
     {
-        scanf("%s",nome_do_campo);
+        scanf("%99s",nome_do_campo);
+        scanf("%9s",valor);
 
         // Processo lógico para definir o registro de referência
         if(strcmp(nome_do_campo,"unidadeMedida") == 0)
         {
-            scanf("%s",valor);
-
             if(strcmp(valor,"NULO") == 0)
                 r_ref.r.unidadeMedida = LIXO;
             else
@@ -137,7 +142,6 @@ ASSIST_REG Registro_de_referencia()
         }
         else if( strcmp(nome_do_campo,"idPoPs") == 0)
         {
-            scanf("%s",valor);
             if(strcmp(valor,"NULO")== 0)
                 r_ref.r.idPoPs = NULO;
             else
@@ -147,7 +151,6 @@ ASSIST_REG Registro_de_referencia()
         }
         else if( strcmp(nome_do_campo,"idPoPsConectado") == 0)
         {
-            scanf("%s",valor);
             if(strcmp(valor,"NULO") == 0)
                 r_ref.r.idPopsConectado = NULO;
             else
@@ -157,7 +160,6 @@ ASSIST_REG Registro_de_referencia()
         }
         else if( strcmp(nome_do_campo,"velocidade") == 0)
         {
-            scanf("%s",valor);
             if(strcmp(valor,"NULO") == 0)
                 r_ref.r.velocidade = NULO;
             else
@@ -184,7 +186,7 @@ void WHERE(char *nome_arq_bin, int n)
 
     if(arq == NULL)
     {
-        printf("Falha no processamento do arquivo.\n");
+        printf("Falha no processamento do arquivo.");
         return;
     }
 
@@ -194,7 +196,8 @@ void WHERE(char *nome_arq_bin, int n)
 
     if(head.proxRRN == 0)
     {
-        printf("Registro inexistente.\n");
+        printf("Registro inexistente.");
+        fclose(arq);
         return;
     }
 
@@ -205,23 +208,24 @@ void WHERE(char *nome_arq_bin, int n)
         ASSIST_REG r_ref = Registro_de_referencia();
         ASSIST_REG r_copia = (ASSIST_REG){0,r,NAO,NAO,NAO,NAO};
 
-        // Flag
-        // 0 se registro não foi encontrado
-        // 1 caso contrário
         int encontrado = 0;
 
         // Loop que irá buscar o registro
-        while(Busca_Sequencial(arq,&r_ref,&r_copia) != 1)
+        while(Busca_Sequencial(arq,&r_ref,&r_copia) == 0)
         {
+            int RRN = r_copia.RRN;
+
             // Caso encontre o registro será printado
-            PRINTAR_REGISTRO(&(r_copia.r));
+            Printar_DATA_REG(&(r_copia.r));
             encontrado = 1;
+
+            r_ref.RRN = RRN + 1;
         }
 
         // Condição de registro não encontrado
         if(encontrado == 0)
         {
-            printf("Registro inexistente.\n");
+            printf("Registro inexistente.");
         }
 
         // Volta o ponteiro do arquivo para o início dos registros de dados
@@ -244,7 +248,7 @@ void ACCESS(char *nome_arq_bin,int RRN)
 
     if(arq == NULL)
     {
-        printf("Falha no processamento do arquivo.\n");
+        printf("Falha no processamento do arquivo.");
         return;
     }
 
@@ -255,262 +259,219 @@ void ACCESS(char *nome_arq_bin,int RRN)
 
     if(head.proxRRN == 0 || RRN >= head.proxRRN )
     {
-        printf("Registro inexistente.\n");
+        printf("Registro inexistente.");
+        fclose(arq);
         return;
     }
 
     // Posiciona o ponteiro para o local correto
-    fseek(arq, RRN * sizeofDATA ,SEEK_CUR);
+    fseek(arq, sizeofHEADER + RRN * sizeofDATA, SEEK_SET);
 
     // Faz a leitura
-    Ler_DATA_bin(arq,&reg);
+    int status_leitura = Ler_DATA_bin(arq,&reg);
 
     // Fecha o arquivo
     fclose(arq);
 
-    // Printa o registro
-    PRINTAR_REGISTRO(&reg);
+    if( status_leitura != 0 )
+        printf("Registro inexistente.");
+    else
+        Printar_DATA_REG(&reg);
 }
 
-// Função auxiliar da funcionalidade DELETE()
-// Recebe um array de inteiros de RRNs para remover e atualizar o cabeçalho
-void Remocao(char *nome_arq_bin, int qtd_removidos, int* RRNs)
-{
-    FILE* arq = fopen(nome_arq_bin, "r+b");
-
-    if(arq == NULL)
-    {
-        printf("Falha no processamento do arquivo.\n");
-        return;
-    }
-
-    HEADER_REG head = innit_header_reg();
-
-    Ler_HEADER_bin(arq, &head);
-
-    int topoPilha = head.topoPilha;
-
-    for(int i = 0; i < qtd_removidos; i++)
-    {
-        // Altera o cursor do arquivo na posição do RRN para remoção
-        fseek(arq, sizeofHEADER + (RRNs[i] * sizeofDATA), SEEK_SET);
-
-        // Escreve 1 no campo de removido
-        fwrite("1", sizeof(char), 1, arq);
-        // Escreve o topoPilha no campo encadeamentoPilha
-        fwrite(&topoPilha, sizeof(int), 1, arq);
-
-        //Atualiza o topoPilha
-        topoPilha = RRNs[i];
-
-        // Incrementa a quantidade de registros removidos
-        head.nroRegRem++;
-    }
-
-    // Atribui o topoPilha no cabeçalho
-    head.topoPilha = topoPilha;
-
-    //Volta o cursor no local do cabeçalho
-    fseek(arq, 0, SEEK_SET);
-
-    // Escreve o cabeçalho atualizado
-    Escrever_HEADER_bin(arq, &head);
-
-    // Fecha o arquivo
-    fclose(arq);
-}
 
 /*
     Implementação da Funcionalidade 5
 */
 void DELETE(char *nome_arq_bin, int n)
 {
-    FILE *arq = fopen(nome_arq_bin, "rb");
+    FILE *arq = fopen(nome_arq_bin, "r+b");
 
-    if(arq == NULL)
+    if (arq == NULL)
     {
-        printf("Falha no processamento do arquivo.\n");
+        printf("Falha no processamento do arquivo.");
         return;
     }
 
     HEADER_REG head = innit_header_reg();
     Ler_HEADER_bin(arq, &head);
 
-    if(head.proxRRN == 0)
+    if (head.proxRRN == 0)
     {
-        printf("Registro inexistente.\n");
+        printf("Registro inexistente.");
         fclose(arq);
         return;
     }
 
-    // Aloca tamanho seguro (o máximo possível de registros)
-    int* RRNs_Removidos = (int*)malloc(head.proxRRN * sizeof(int));
+    // Marca o arquivo como inconsistente antes da escrita.
+    head.status = INCONSISTENTE;
 
-    // Contador independente para o vetor
-    int qtd_removidos = 0;
+    fseek(arq, 0, SEEK_SET);
+    Escrever_HEADER_bin(arq, &head);
 
-    // O fseek inicial
-    fseek(arq, sizeofHEADER, SEEK_SET);
-
-    for(int i = 0; i < n; i++)
+    for (int i = 0; i < n; i++)
     {
-        DATA_REG r = innit_data_reg();
         ASSIST_REG r_ref = Registro_de_referencia();
+
+        DATA_REG r = innit_data_reg();
+
         ASSIST_REG r_copia = (ASSIST_REG){0, r, NAO, NAO, NAO, NAO};
 
-        //int encontrado = 0;
-
-        // Assumindo que Busca_Sequencial retorna 0 ao encontrar
-        while(Busca_Sequencial(arq, &r_ref, &r_copia) == 0)
-        {
-            //encontrado = 1;
-
-            // Salva o RRN e incrementa o contador do vetor
-            RRNs_Removidos[qtd_removidos] = r_copia.RRN;
-            qtd_removidos++;
-        }
-
-        /*
-        if(encontrado == 0)
-        {
-            printf("Registro inexistente.\n");
-        }
-        */
-
-
-        // Volta o ponteiro do arquivo para o início dos registros de dados
-        // para realizar um nova busca de um registro de referência
+        // Começa a busca no primeiro registro.
         fseek(arq, sizeofHEADER, SEEK_SET);
+
+        while (Busca_Sequencial(arq, &r_ref, &r_copia) == 0)
+        {
+            int RRN = r_copia.RRN;
+
+            Remover_DATA_bin(arq, &head, RRN);
+
+            // Continua a busca a partir do próximo RRN.
+            r_ref.RRN = RRN + 1;
+        }
     }
 
-    // Fechar o arquivo de leitura ANTES de abrir o de escrita na Remocao()!
+    // Atualiza o cabeçalho com os valores finais.
+    head.status = CONSISTENTE;
+
+    fseek(arq, 0, SEEK_SET);
+    Escrever_HEADER_bin(arq, &head);
+
     fclose(arq);
-
-    if (qtd_removidos > 0)
-    {
-        Remocao(nome_arq_bin, qtd_removidos, RRNs_Removidos);
-    }
-
-    // Libera a memória alocada no heap!
-    free(RRNs_Removidos);
 
     nroPares(nome_arq_bin);
 
     BinarioNaTela(nome_arq_bin);
 }
 
-void Concatena_reg(UPDATE_REG* r_dst, ASSIST_REG* r_atualizacoes, ASSIST_REG* r_copia)
+void INSERT(char *nome_arq_bin, int n)
 {
-    r_dst->RRN = r_copia->RRN;
+    FILE *arq = fopen(nome_arq_bin, "r+b");
 
-    r_dst->r = r_copia->r;
-
-    if(r_atualizacoes->usa_idpops == SIM)
+    if (arq == NULL)
     {
-        r_dst->r.idPoPs = r_atualizacoes->r.idPoPs;
-    }
-    if(r_atualizacoes->usa_idconecta == SIM)
-    {
-        r_dst->r.idPopsConectado = r_atualizacoes->r.idPopsConectado;
-    }
-    if(r_atualizacoes->usa_velocidade == SIM)
-    {
-        r_dst->r.velocidade = r_atualizacoes->r.velocidade;
-    }
-    if(r_atualizacoes->usa_un_medida == SIM)
-    {
-        r_dst->r.unidadeMedida = r_atualizacoes->r.unidadeMedida;
-    }
-}
-
-void Atualizacao(char* nome_arq_bin,int qtd_atualizacoes ,UPDATE_REG* reg)
-{
-    FILE* arq = fopen(nome_arq_bin, "r+b");
-
-    if(arq == NULL)
-    {
-        printf("Falha no processamento do arquivo.\n");
-        return;
-    }
-
-    for(int i = 0 ; i < qtd_atualizacoes ; i++)
-    {
-        fseek(arq,sizeofHEADER + (reg[i].RRN * sizeofDATA), SEEK_SET);
-
-        Escrever_DATA_bin(arq,&(reg[i].r));
-    }
-
-    fclose(arq);
-}
-
-void UPDATE(char* nome_arq_bin, int n)
-{
-    FILE *arq = fopen(nome_arq_bin, "rb");
-
-    if(arq == NULL)
-    {
-        printf("Falha no processamento do arquivo.\n");
+        printf("Falha no processamento do arquivo.");
         return;
     }
 
     HEADER_REG head = innit_header_reg();
     Ler_HEADER_bin(arq, &head);
 
-    if(head.proxRRN == 0)
+    // Marca o arquivo como inconsistente antes da escrita.
+    head.status = INCONSISTENTE;
+
+    fseek(arq, 0, SEEK_SET);
+    Escrever_HEADER_bin(arq, &head);
+
+    for(int i = 0 ; i < n ; i++)
     {
-        printf("Registro inexistente.\n");
+        DATA_REG r_novo = innit_data_reg();
+        DATA_REG r_aux = innit_data_reg();
+
+        Ler_NOVO_DATA_REG(&r_novo);
+
+        if( head.topoPilha == -1)
+        {
+            fseek(arq, sizeofHEADER + (head.proxRRN * sizeofDATA), SEEK_SET);
+
+            Escrever_DATA_bin(arq,&r_novo);
+
+            head.proxRRN++;
+        }
+        else
+        {
+            long posicao = sizeofHEADER + (head.topoPilha * sizeofDATA);
+
+            fseek(arq, posicao, SEEK_SET);
+
+            Ler_DATA_bin(arq,&r_aux);
+
+            head.topoPilha = r_aux.encadeamentoPilha;
+            head.nroRegRem--;
+
+            fseek(arq, posicao, SEEK_SET);
+
+            Escrever_DATA_bin(arq,&r_novo);
+        }
+    }
+
+    head.status = CONSISTENTE;
+
+    fseek(arq, 0, SEEK_SET);
+    Escrever_HEADER_bin(arq, &head);
+
+    fclose(arq);
+
+    nroPares(nome_arq_bin);
+    BinarioNaTela(nome_arq_bin);
+}
+
+
+/*
+    Implementação da Funcionalidade 7
+*/
+void UPDATE(char *nome_arq_bin, int n)
+{
+    FILE *arq = fopen(nome_arq_bin, "r+b");
+
+    if (arq == NULL)
+    {
+        printf("Falha no processamento do arquivo.");
+        return;
+    }
+
+    HEADER_REG head = innit_header_reg();
+    Ler_HEADER_bin(arq, &head);
+
+    if (head.proxRRN == 0)
+    {
+        printf("Registro inexistente.");
         fclose(arq);
         return;
     }
 
-    UPDATE_REG* Reg_Atualizados = (UPDATE_REG*)malloc(head.proxRRN * sizeof(UPDATE_REG));
+    // Marca o arquivo como inconsistente.
+    head.status = INCONSISTENTE;
 
-    int qtd_atualizacoes = 0;
+    fseek(arq, 0, SEEK_SET);
+    Escrever_HEADER_bin(arq, &head);
 
-    for(int i = 0 ; i < n ; i++)
+    for (int i = 0; i < n; i++)
     {
+        // Obtém os registros que deverão ser buscados
         ASSIST_REG r_ref = Registro_de_referencia();
+
+        // Obtém as atualizações dos registros
         ASSIST_REG r_atualizacoes = Registro_de_referencia();
 
         r_ref.RRN = 0;
 
         DATA_REG r = innit_data_reg();
+
         ASSIST_REG r_copia = (ASSIST_REG){0, r, NAO, NAO, NAO, NAO};
 
-        //int encontrado = 0;
-
-        while(Busca_Sequencial(arq, &r_ref, &r_copia) == 0)
-        {
-            //encontrado = 1;
-
-            Concatena_reg(&(Reg_Atualizados[qtd_atualizacoes]),&r_atualizacoes,&r_copia);
-
-            qtd_atualizacoes++;
-
-            r_ref.RRN = r_copia.RRN + 1;
-        }
-
-        /*
-        if(encontrado == 0)
-        {
-            printf("Registro inexistente.\n");
-        }
-        */
-        // Volta o ponteiro do arquivo para o início dos registros de dados
-        // para realizar um nova busca de um registro de referência
+        // Reinicia a busca no início dos dados.
         fseek(arq, sizeofHEADER, SEEK_SET);
+
+        while (Busca_Sequencial(arq, &r_ref, &r_copia) == 0)
+        {
+            int RRN = r_copia.RRN;
+
+            // Atualiza o registro encontrado.
+            Atualizar_DATA_bin(arq, RRN,&r_atualizacoes, &r_copia);
+
+            // Continua a busca após o registro atualizado.
+            r_ref.RRN = RRN + 1;
+        }
     }
+
+    head.status = CONSISTENTE;
+
+    fseek(arq, 0, SEEK_SET);
+    Escrever_HEADER_bin(arq, &head);
 
     fclose(arq);
 
-    if(qtd_atualizacoes > 0)
-    {
-        Atualizacao(nome_arq_bin,qtd_atualizacoes,Reg_Atualizados);
-    }
-
-    free(Reg_Atualizados);
-
     nroPares(nome_arq_bin);
-
     BinarioNaTela(nome_arq_bin);
 }

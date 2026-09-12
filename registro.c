@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-char delimitador[] = ",\n";
+char delimitador[] = ", \n";
 
 // Inicialização do Registro de Cabeçalho
 HEADER_REG innit_header_reg()
@@ -141,15 +141,22 @@ void Escrever_HEADER_bin(FILE* arq, HEADER_REG* hreg)
     -1 - caso o registro foi logicamente removido
     1  - caso tenha chegado ao fim do arquivo
 */
-int Ler_DATA_bin(FILE* arq , DATA_REG *reg)
+int Ler_DATA_bin(FILE *arq, DATA_REG *reg)
 {
+    if (arq == NULL || reg == NULL)
+        return 1;
+
     if (fread(&reg->removido, sizeof(char), 1, arq) != 1)
         return 1;
-    if(reg->removido == REMOVIDO)
+
+    if (reg->removido == REMOVIDO)
     {
-        fseek(arq, sizeofDATA - 1, SEEK_CUR);
+        if (fseek(arq, sizeofDATA - sizeof(char), SEEK_CUR) != 0)
+            return 1;
+
         return -1;
     }
+
     if (fread(&reg->encadeamentoPilha, sizeof(int), 1, arq) != 1)
         return 1;
 
@@ -199,16 +206,22 @@ int Ler_HEADER_bin(FILE* arq, HEADER_REG* hreg)
     registro de referência (r_ref) e copia-o todo no registro r_copia
     Retorna:
     0 - caso tenha encontrado algum
-    1 - caso tenha chegado ao fim do arquivo
+    1 - caso tenha ocorrido algum erro ou chegado ao fim do arquivo
 */
 int Busca_Sequencial(FILE *arq, ASSIST_REG *r_ref, ASSIST_REG *r_copia)
 {
     int rrn_atual = r_ref->RRN;
     int status_leitura;
 
-    while( (status_leitura = Ler_DATA_bin(arq,&(r_copia->r))) != 1)
+    if (arq == NULL || r_ref == NULL || r_copia == NULL)
+        return 1;
+
+    if (fseek(arq, rrn_atual * sizeofDATA + sizeofHEADER, SEEK_SET) != 0)
+        return 1;
+
+    while ((status_leitura = Ler_DATA_bin(arq, &(r_copia->r))) != 1)
     {
-        if(status_leitura == -1)
+        if (status_leitura == -1)
         {
             rrn_atual++;
             continue;
@@ -234,8 +247,6 @@ int Busca_Sequencial(FILE *arq, ASSIST_REG *r_ref, ASSIST_REG *r_copia)
             rrn_atual++; continue;
         }
 
-        //PRINTAR_REGISTRO(&(r_copia->r));
-
         r_copia->RRN = rrn_atual;
         return 0;
     }
@@ -243,8 +254,42 @@ int Busca_Sequencial(FILE *arq, ASSIST_REG *r_ref, ASSIST_REG *r_copia)
     return 1;
 }
 
+void Ler_NOVO_DATA_REG(DATA_REG* reg)
+{
+    char buffer[Tamanho_STRING];
+
+    scanf("%99s",buffer);
+
+    if(strcmp(buffer,"NULO") == 0)
+        reg->idPoPs = NULO;
+    else
+        reg->idPoPs = atoi(buffer);
+
+    scanf("%99s",buffer);
+
+    if(strcmp(buffer,"NULO") == 0)
+        reg->idPopsConectado = NULO;
+    else
+        reg->idPopsConectado = atoi(buffer);
+
+    scanf("%99s",buffer);
+
+    if(strcmp(buffer,"NULO")== 0)
+        reg->velocidade = NULO;
+    else
+        reg->velocidade = atoi(buffer);
+
+    scanf("%99s",buffer);
+
+    if(strcmp(buffer,"NULO")== 0)
+        reg->unidadeMedida = LIXO;
+    else
+        reg->unidadeMedida = buffer[1];
+}
+
+
 // Print do Registro
-void PRINTAR_REGISTRO(DATA_REG* reg)
+void Printar_DATA_REG(DATA_REG* reg)
 {
     if(reg->idPoPs == NULO)
         printf("NULO ");
@@ -265,6 +310,67 @@ void PRINTAR_REGISTRO(DATA_REG* reg)
         printf("NULO\n");
     else
         printf("\"%c\"\n",reg->unidadeMedida);
+}
+
+void Remover_DATA_bin(FILE *arq, HEADER_REG *head, int RRN)
+{
+    char removido = REMOVIDO;
+
+    int tamanho_lixo = sizeofDATA - 5;
+    char lixo[tamanho_lixo];
+    memset(lixo, LIXO, tamanho_lixo);
+
+    // Posiciona no início do registro a ser removido.
+    fseek(arq, sizeofHEADER + (RRN * sizeofDATA), SEEK_SET);
+
+    // Campo removido.
+    fwrite(&removido, sizeof(char), 1, arq);
+
+    // Encadeamento da pilha de removidos.
+    fwrite(&head->topoPilha, sizeof(int), 1, arq);
+
+    // Campos de dados preenchidos com lixo.
+    fwrite(lixo, sizeof(char), tamanho_lixo, arq);
+
+    // Atualiza o cabeçalho em memória.
+    head->topoPilha = RRN;
+    head->nroRegRem++;
+}
+
+void Concatena_reg(DATA_REG* r_dst, ASSIST_REG* r_atualizacoes, ASSIST_REG* r_copia)
+{
+    *r_dst = r_copia->r;
+
+    if(r_atualizacoes->usa_idpops == SIM)
+    {
+        r_dst->idPoPs = r_atualizacoes->r.idPoPs;
+    }
+    if(r_atualizacoes->usa_idconecta == SIM)
+    {
+        r_dst->idPopsConectado = r_atualizacoes->r.idPopsConectado;
+    }
+    if(r_atualizacoes->usa_velocidade == SIM)
+    {
+        r_dst->velocidade = r_atualizacoes->r.velocidade;
+    }
+    if(r_atualizacoes->usa_un_medida == SIM)
+    {
+        r_dst->unidadeMedida = r_atualizacoes->r.unidadeMedida;
+    }
+}
+
+void Atualizar_DATA_bin(FILE *arq, int RRN, ASSIST_REG *r_atualizacoes, ASSIST_REG *r_copia)
+{
+    DATA_REG reg_atualizado = innit_data_reg();
+
+    // Combina os dados antigos com os novos valores.
+    Concatena_reg(&reg_atualizado, r_atualizacoes, r_copia);
+
+    // Posiciona no registro original.
+    fseek(arq, sizeofHEADER + (RRN * sizeofDATA), SEEK_SET);
+
+    // Escreve imediatamente os campos atualizados.
+    Escrever_DATA_bin(arq, &reg_atualizado);
 }
 
 
@@ -331,3 +437,5 @@ void nroPares(char *nome_arq_bin)
 
     free(par);
 }
+
+

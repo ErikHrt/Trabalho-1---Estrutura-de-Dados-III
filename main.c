@@ -41,7 +41,8 @@ int main()
     }
     else if( funcionalidade == 6)
     {
-
+        scanf("%d",&n);
+        INSERT(nome_arq_1,n);
     }
     else if( funcionalidade == 7)
     {

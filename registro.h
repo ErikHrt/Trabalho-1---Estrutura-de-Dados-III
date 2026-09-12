@@ -49,35 +49,32 @@ typedef struct
     int usa_un_medida;
 }ASSIST_REG;
 
-#define SIM 0
-#define NAO 1
+#define SIM 1
+#define NAO 0
 
 #define Tamanho_STRING 100
 
-typedef struct
-{
-    int RRN;
-    DATA_REG r;
-}UPDATE_REG;
-
-HEADER_REG innit_header_reg();
-DATA_REG innit_data_reg();
 
 int Ler_registro_csv(FILE* arq_entrada ,DATA_REG* reg);
 
-void Escrever_DATA_bin(FILE* arq,DATA_REG* reg);
-
+HEADER_REG innit_header_reg();
 void Escrever_HEADER_bin(FILE* arq, HEADER_REG* hreg);
-
 int Ler_HEADER_bin(FILE* arq, HEADER_REG* hreg);
 
+DATA_REG innit_data_reg();
+void Escrever_DATA_bin(FILE* arq,DATA_REG* reg);
 int Ler_DATA_bin(FILE* arq, DATA_REG* reg);
+
+void Ler_NOVO_DATA_REG(DATA_REG* reg);
+
+void Atualizar_DATA_bin(FILE *arq, int RRN, ASSIST_REG *r_atualizacoes, ASSIST_REG *r_copia);
+void Remover_DATA_bin(FILE *arq, HEADER_REG *head, int RRN);
+void Printar_DATA_REG(DATA_REG* reg);
+
 
 int Busca_Sequencial(FILE *arq, ASSIST_REG *r_ref, ASSIST_REG *r_copia);
 
-void PRINTAR_REGISTRO(DATA_REG* reg);
 
 void nroPares(char *nome_arq_bin);
-
 
 #endif // REGISTRO_H_INCLUDED
